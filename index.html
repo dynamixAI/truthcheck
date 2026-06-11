@@ -35,12 +35,11 @@
   .check-btn:hover { opacity: 0.9; }
   .check-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .examples { margin-top: 8px; }
+  .examples { margin-top: 16px; }
   .example-label { font-size: 12px; color: #888; margin-bottom: 6px; }
   .example-item { font-size: 13px; color: #534AB7; cursor: pointer; padding: 4px 0; display: block; }
   .example-item:hover { text-decoration: underline; }
 
-  /* Loading */
   .loading { display: none; text-align: center; padding: 32px 20px; }
   .spinner { width: 40px; height: 40px; border: 3px solid #e0ddd5; border-top-color: #534AB7; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -51,7 +50,6 @@
   .step.done { color: #3B6D11; }
   .step-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 
-  /* Result */
   .result { display: none; }
   .verdict-banner { border-radius: 10px; padding: 20px; text-align: center; margin-bottom: 16px; }
   .verdict-TRUE { background: #EAF3DE; }
@@ -100,16 +98,9 @@
   .back-btn { background: none; border: none; color: #534AB7; font-size: 14px; cursor: pointer; padding: 0 0 12px; display: flex; align-items: center; gap: 4px; font-family: inherit; }
 
   .error-box { background: #FCEBEB; border: 1px solid #F7C1C1; border-radius: 8px; padding: 14px; font-size: 14px; color: #791F1F; line-height: 1.6; }
-
   .limit-box { background: #FAEEDA; border: 1px solid #FAC775; border-radius: 8px; padding: 14px; font-size: 14px; color: #633806; line-height: 1.6; }
 
   footer { text-align: center; font-size: 12px; color: #aaa; padding: 24px 16px; }
-  footer a { color: #534AB7; text-decoration: none; }
-
-  @media (max-width: 480px) {
-    .type-pill { font-size: 11px; padding: 7px 2px; }
-    .intro h1 { font-size: 20px; }
-  }
 </style>
 </head>
 <body>
@@ -129,7 +120,6 @@
     <p>Paste any social media post, headline, or claim. Our AI checks it against reputable sources and gives you a clear verdict.</p>
   </div>
 
-  <!-- INPUT FORM -->
   <div class="card" id="input-section">
     <label>What type of content are you checking?</label>
     <div class="type-row">
@@ -140,9 +130,8 @@
     </div>
     <label for="claim-input">Paste or type the claim here</label>
     <textarea id="claim-input" placeholder="e.g. 5G towers caused the COVID-19 pandemic..."></textarea>
-    <button class="check-btn" onclick="runCheck()" id="check-btn">🔍 Check this claim</button>
-
-    <div class="examples" style="margin-top:16px;">
+    <button class="check-btn" onclick="runCheck()">🔍 Check this claim</button>
+    <div class="examples">
       <div class="example-label">Try an example:</div>
       <span class="example-item" onclick="setExample(this)" data-text="5G towers spread COVID-19 by activating viruses in vaccinated people.">💬 "5G towers spread COVID-19…"</span>
       <span class="example-item" onclick="setExample(this)" data-text="Drinking bleach can cure cancer according to a new study.">💬 "Drinking bleach cures cancer…"</span>
@@ -151,7 +140,6 @@
     </div>
   </div>
 
-  <!-- LOADING -->
   <div class="card loading" id="loading-section">
     <div class="spinner"></div>
     <div class="loading-text">Analysing your claim…</div>
@@ -163,24 +151,19 @@
     </div>
   </div>
 
-  <!-- RESULT -->
   <div class="result" id="result-section">
     <button class="back-btn" onclick="resetApp()">← Check another claim</button>
     <div class="card">
       <div id="result-inner"></div>
     </div>
   </div>
-
 </main>
 
 <footer>
-  Built with Google Gemini AI · <a href="#">TruthCheck</a> · For educational use
+  Built with AI · TruthCheck · For educational use
 </footer>
 
 <script>
-  const API_KEY = 'tc_live_key';
-  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-
   let selectedType = 'text';
 
   function selectType(el, type) {
@@ -198,19 +181,6 @@
 
   function setExample(el) {
     document.getElementById('claim-input').value = el.dataset.text;
-  }
-
-  function showSection(id) {
-    ['input-section','loading-section','result-section'].forEach(s => {
-      const el = document.getElementById(s);
-      el.style.display = 'none';
-      if (el.classList.contains('loading')) el.style.display = 'none';
-      if (el.classList.contains('result')) el.style.display = 'none';
-    });
-    const target = document.getElementById(id);
-    if (id === 'loading-section') { target.style.display = 'block'; }
-    else if (id === 'result-section') { target.style.display = 'block'; }
-    else { target.style.display = 'block'; }
   }
 
   function resetApp() {
@@ -231,69 +201,32 @@
       if (i < steps.length) {
         document.getElementById(steps[i]).className = 'step active';
         i++;
-      } else {
-        clearInterval(iv);
-      }
+      } else clearInterval(iv);
     }, 1000);
   }
 
   async function runCheck() {
     const claim = document.getElementById('claim-input').value.trim();
-    if (!claim) {
-      document.getElementById('claim-input').focus();
-      return;
-    }
+    if (!claim) { document.getElementById('claim-input').focus(); return; }
 
     document.getElementById('input-section').style.display = 'none';
     document.getElementById('loading-section').style.display = 'block';
     document.getElementById('result-section').style.display = 'none';
     animateSteps();
 
-    const prompt = `You are TruthCheck, an expert AI fact-checker. A user has submitted the following ${selectedType} content for fact-checking:
-
-"${claim}"
-
-Analyse this claim carefully using your knowledge of reputable sources, scientific consensus, and verified facts.
-
-Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation outside the JSON. Use this exact structure:
-{
-  "verdict": "TRUE" or "FALSE" or "MISLEADING" or "UNVERIFIED",
-  "confidence": a number from 0 to 100,
-  "headline": "A short 8-10 word verdict summary",
-  "summary": "2-3 sentences explaining why this is true/false/misleading. Include what the actual facts are.",
-  "sources": [
-    {"name": "Source name", "reliability": "High" or "Medium", "note": "One sentence on what this source says about the claim"},
-    {"name": "Source name", "reliability": "High" or "Medium", "note": "One sentence note"},
-    {"name": "Source name", "reliability": "High" or "Medium", "note": "One sentence note"}
-  ],
-  "tip": "One practical sentence on how to spot this type of misinformation in future."
-}`;
-
     try {
-      const response = await fetch(GEMINI_URL, {
+      const response = await fetch('/api/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
-        })
+        body: JSON.stringify({ claim, type: selectedType })
       });
 
-      if (response.status === 429) {
-        showLimitError();
-        return;
-      }
-
-      if (!response.ok) {
-        showGenericError();
-        return;
-      }
+      if (response.status === 429) { showLimitError(); return; }
+      if (!response.ok) { showGenericError(); return; }
 
       const data = await response.json();
-      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const clean = raw.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-      renderResult(parsed);
+      if (data.error) { showGenericError(); return; }
+      renderResult(data);
 
     } catch(e) {
       showGenericError();
@@ -321,21 +254,16 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation
         <div class="verdict-label">${verdict}</div>
         <div class="verdict-headline">${d.headline || ''}</div>
       </div>
-
       <div class="conf-row">
         <span class="conf-label">Confidence</span>
         <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%;background:${barColors[verdict]};"></div></div>
         <span class="conf-pct">${conf}%</span>
       </div>
-
       <div class="section-title">What the evidence says</div>
       <div class="summary">${d.summary || ''}</div>
-
       <div class="section-title">Sources checked</div>
       ${sourcesHtml}
-
       <div class="tip-box"><strong>💡 Spot it next time:</strong> ${d.tip || ''}</div>
-
       <div class="action-row">
         <button class="action-btn" onclick="copyResult()">📋 Copy verdict</button>
         <button class="action-btn action-btn-primary" onclick="shareResult()">🔗 Share</button>
@@ -349,7 +277,7 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation
     document.getElementById('result-inner').innerHTML = `
       <div class="limit-box">
         <strong>Daily limit reached</strong><br>
-        We've hit our free daily fact-checking limit. Please try again tomorrow. We're working on increasing capacity.
+        We have hit our free daily fact-checking limit. Please try again tomorrow.
       </div>`;
     document.getElementById('loading-section').style.display = 'none';
     document.getElementById('result-section').style.display = 'block';
@@ -359,7 +287,7 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation
     document.getElementById('result-inner').innerHTML = `
       <div class="error-box">
         <strong>Something went wrong</strong><br>
-        We couldn't complete the fact-check. Please check your connection and try again.
+        We could not complete the fact-check. Please check your connection and try again.
       </div>`;
     document.getElementById('loading-section').style.display = 'none';
     document.getElementById('result-section').style.display = 'block';
@@ -377,11 +305,7 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation
     const verdict = document.querySelector('.verdict-label')?.textContent || '';
     const summary = document.querySelector('.summary')?.textContent || '';
     if (navigator.share) {
-      navigator.share({
-        title: `TruthCheck: ${verdict}`,
-        text: summary,
-        url: window.location.href
-      });
+      navigator.share({ title: `TruthCheck: ${verdict}`, text: summary, url: window.location.href });
     } else {
       copyResult();
     }
