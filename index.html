@@ -1,315 +1,107 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TruthCheck — AI Fact Checker</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: #f4f4f0; color: #1a1a1a; min-height: 100vh; }
+export const config = {
+  runtime: 'edge', 
+};
 
-  header { background: #fff; border-bottom: 1px solid #e0ddd5; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
-  .logo { display: flex; align-items: center; gap: 10px; }
-  .logo-icon { width: 34px; height: 34px; background: #534AB7; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; }
-  .logo-text { font-size: 18px; font-weight: 600; color: #1a1a1a; }
-  .logo-badge { font-size: 10px; background: #EEEDFE; color: #3C3489; padding: 3px 8px; border-radius: 20px; font-weight: 500; }
-
-  main { max-width: 680px; margin: 0 auto; padding: 24px 16px; }
-
-  .intro { text-align: center; margin-bottom: 28px; }
-  .intro h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
-  .intro p { font-size: 15px; color: #666; line-height: 1.6; }
-
-  .card { background: #fff; border-radius: 12px; border: 1px solid #e0ddd5; padding: 20px; margin-bottom: 16px; }
-
-  .type-row { display: flex; gap: 8px; margin-bottom: 14px; }
-  .type-pill { flex: 1; padding: 8px 4px; border: 1px solid #e0ddd5; border-radius: 20px; font-size: 12px; text-align: center; cursor: pointer; color: #666; background: #fff; transition: all 0.15s; }
-  .type-pill.selected { background: #EEEDFE; border-color: #534AB7; color: #3C3489; font-weight: 500; }
-  .type-pill:hover { border-color: #534AB7; }
-
-  label { font-size: 13px; font-weight: 500; color: #444; display: block; margin-bottom: 6px; }
-  textarea { width: 100%; border: 1px solid #e0ddd5; border-radius: 8px; padding: 12px; font-size: 15px; font-family: inherit; resize: none; min-height: 100px; color: #1a1a1a; background: #fafaf8; transition: border 0.15s; }
-  textarea:focus { outline: none; border-color: #534AB7; background: #fff; }
-
-  .check-btn { width: 100%; margin-top: 12px; padding: 14px; border-radius: 8px; background: #534AB7; color: #fff; font-size: 16px; font-weight: 500; border: none; cursor: pointer; transition: opacity 0.15s; }
-  .check-btn:hover { opacity: 0.9; }
-  .check-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  .examples { margin-top: 16px; }
-  .example-label { font-size: 12px; color: #888; margin-bottom: 6px; }
-  .example-item { font-size: 13px; color: #534AB7; cursor: pointer; padding: 4px 0; display: block; }
-  .example-item:hover { text-decoration: underline; }
-
-  .loading { display: none; text-align: center; padding: 32px 20px; }
-  .spinner { width: 40px; height: 40px; border: 3px solid #e0ddd5; border-top-color: #534AB7; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { font-size: 15px; color: #444; }
-  .loading-steps { margin-top: 16px; text-align: left; max-width: 260px; margin-left: auto; margin-right: auto; }
-  .step { font-size: 13px; color: #aaa; padding: 5px 0; display: flex; align-items: center; gap: 8px; }
-  .step.active { color: #534AB7; font-weight: 500; }
-  .step.done { color: #3B6D11; }
-  .step-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-
-  .result { display: none; }
-  .verdict-banner { border-radius: 10px; padding: 20px; text-align: center; margin-bottom: 16px; }
-  .verdict-TRUE { background: #EAF3DE; }
-  .verdict-FALSE { background: #FCEBEB; }
-  .verdict-MISLEADING { background: #FAEEDA; }
-  .verdict-UNVERIFIED { background: #F1EFE8; }
-  .verdict-icon { font-size: 40px; margin-bottom: 8px; }
-  .verdict-label { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-  .verdict-TRUE .verdict-label { color: #27500A; }
-  .verdict-FALSE .verdict-label { color: #791F1F; }
-  .verdict-MISLEADING .verdict-label { color: #633806; }
-  .verdict-UNVERIFIED .verdict-label { color: #444441; }
-  .verdict-headline { font-size: 14px; }
-  .verdict-TRUE .verdict-headline { color: #3B6D11; }
-  .verdict-FALSE .verdict-headline { color: #A32D2D; }
-  .verdict-MISLEADING .verdict-headline { color: #854F0B; }
-  .verdict-UNVERIFIED .verdict-headline { color: #5F5E5A; }
-
-  .conf-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-  .conf-label { font-size: 13px; color: #666; white-space: nowrap; }
-  .conf-bar-bg { flex: 1; height: 6px; border-radius: 3px; background: #e0ddd5; }
-  .conf-bar { height: 6px; border-radius: 3px; }
-  .conf-pct { font-size: 13px; color: #666; min-width: 36px; text-align: right; }
-
-  .section-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; margin-top: 16px; }
-  .summary { font-size: 15px; line-height: 1.7; color: #1a1a1a; }
-
-  .source-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f0ede5; }
-  .source-item:last-child { border: none; }
-  .source-dot { width: 8px; height: 8px; border-radius: 50%; background: #534AB7; flex-shrink: 0; margin-top: 5px; }
-  .source-name { font-size: 13px; font-weight: 500; color: #1a1a1a; }
-  .source-rel { font-size: 11px; padding: 2px 7px; border-radius: 10px; font-weight: 500; margin-left: 6px; }
-  .rel-High { background: #EAF3DE; color: #3B6D11; }
-  .rel-Medium { background: #FAEEDA; color: #854F0B; }
-  .source-note { font-size: 13px; color: #666; margin-top: 2px; line-height: 1.5; }
-
-  .tip-box { background: #fafaf8; border: 1px solid #e0ddd5; border-radius: 8px; padding: 12px 14px; font-size: 13px; color: #555; line-height: 1.6; margin-top: 16px; }
-  .tip-box strong { color: #1a1a1a; }
-
-  .action-row { display: flex; gap: 8px; margin-top: 16px; }
-  .action-btn { flex: 1; padding: 11px; border-radius: 8px; border: 1px solid #e0ddd5; font-size: 14px; cursor: pointer; background: #fff; color: #1a1a1a; font-family: inherit; transition: background 0.15s; }
-  .action-btn:hover { background: #f4f4f0; }
-  .action-btn-primary { background: #534AB7; color: #fff; border-color: #534AB7; }
-  .action-btn-primary:hover { background: #4840a0; }
-
-  .back-btn { background: none; border: none; color: #534AB7; font-size: 14px; cursor: pointer; padding: 0 0 12px; display: flex; align-items: center; gap: 4px; font-family: inherit; }
-
-  .error-box { background: #FCEBEB; border: 1px solid #F7C1C1; border-radius: 8px; padding: 14px; font-size: 14px; color: #791F1F; line-height: 1.6; }
-  .limit-box { background: #FAEEDA; border: 1px solid #FAC775; border-radius: 8px; padding: 14px; font-size: 14px; color: #633806; line-height: 1.6; }
-
-  footer { text-align: center; font-size: 12px; color: #aaa; padding: 24px 16px; }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="logo">
-    <div class="logo-icon">✓</div>
-    <span class="logo-text">TruthCheck</span>
-    <span class="logo-badge">AI</span>
-  </div>
-  <span style="font-size:13px;color:#888;">Free fact checker</span>
-</header>
-
-<main>
-  <div class="intro">
-    <h1>Is it true or false?</h1>
-    <p>Paste any social media post, headline, or claim. Our AI checks it against reputable sources and gives you a clear verdict.</p>
-  </div>
-
-  <div class="card" id="input-section">
-    <label>What type of content are you checking?</label>
-    <div class="type-row">
-      <div class="type-pill selected" onclick="selectType(this,'text')">📝 Text</div>
-      <div class="type-pill" onclick="selectType(this,'headline')">📰 Headline</div>
-      <div class="type-pill" onclick="selectType(this,'image')">🖼️ Image</div>
-      <div class="type-pill" onclick="selectType(this,'video')">🎥 Video</div>
-    </div>
-    <label for="claim-input">Paste or type the claim here</label>
-    <textarea id="claim-input" placeholder="e.g. 5G towers caused the COVID-19 pandemic..."></textarea>
-    <button class="check-btn" onclick="runCheck()">🔍 Check this claim</button>
-    <div class="examples">
-      <div class="example-label">Try an example:</div>
-      <span class="example-item" onclick="setExample(this)" data-text="5G towers spread COVID-19 by activating viruses in vaccinated people.">💬 "5G towers spread COVID-19…"</span>
-      <span class="example-item" onclick="setExample(this)" data-text="Drinking bleach can cure cancer according to a new study.">💬 "Drinking bleach cures cancer…"</span>
-      <span class="example-item" onclick="setExample(this)" data-text="The Amazon rainforest produces 20% of the world's oxygen.">💬 "Amazon produces 20% of the world's oxygen…"</span>
-      <span class="example-item" onclick="setExample(this)" data-text="Vaccines contain microchips that allow governments to track citizens.">💬 "Vaccines contain microchips…"</span>
-    </div>
-  </div>
-
-  <div class="card loading" id="loading-section">
-    <div class="spinner"></div>
-    <div class="loading-text">Analysing your claim…</div>
-    <div class="loading-steps">
-      <div class="step active" id="step1"><span class="step-dot"></span>Extracting core claims</div>
-      <div class="step" id="step2"><span class="step-dot"></span>Searching reputable sources</div>
-      <div class="step" id="step3"><span class="step-dot"></span>Cross-referencing evidence</div>
-      <div class="step" id="step4"><span class="step-dot"></span>Generating verdict</div>
-    </div>
-  </div>
-
-  <div class="result" id="result-section">
-    <button class="back-btn" onclick="resetApp()">← Check another claim</button>
-    <div class="card">
-      <div id="result-inner"></div>
-    </div>
-  </div>
-</main>
-
-<footer>
-  Built with AI · TruthCheck · For educational use
-</footer>
-
-<script>
-  let selectedType = 'text';
-
-  function selectType(el, type) {
-    document.querySelectorAll('.type-pill').forEach(p => p.classList.remove('selected'));
-    el.classList.add('selected');
-    selectedType = type;
-    const ph = {
-      text: 'Paste or type the claim or post here…',
-      headline: 'Paste the news headline here…',
-      image: 'Describe the image and any text or captions in it…',
-      video: 'Describe what the video claims or paste its URL…'
-    };
-    document.getElementById('claim-input').placeholder = ph[type];
-  }
-
-  function setExample(el) {
-    document.getElementById('claim-input').value = el.dataset.text;
-  }
-
-  function resetApp() {
-    document.getElementById('input-section').style.display = 'block';
-    document.getElementById('loading-section').style.display = 'none';
-    document.getElementById('result-section').style.display = 'none';
-    document.getElementById('claim-input').value = '';
-    ['step1','step2','step3','step4'].forEach((s,i) => {
-      document.getElementById(s).className = 'step' + (i===0?' active':'');
+export default async function handler(req) {
+  // 1. Handle CORS Preflight Options Request
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
     });
   }
 
-  function animateSteps() {
-    const steps = ['step1','step2','step3','step4'];
-    let i = 0;
-    const iv = setInterval(() => {
-      if (i > 0) document.getElementById(steps[i-1]).className = 'step done';
-      if (i < steps.length) {
-        document.getElementById(steps[i]).className = 'step active';
-        i++;
-      } else clearInterval(iv);
-    }, 1000);
+  // 2. Read parameters directly from the URL (safest way for Vercel Edge)
+  const { searchParams } = new URL(req.url);
+  const claim = searchParams.get('claim');
+  const type = searchParams.get('type') || 'text';
+
+  if (!claim) {
+    return new Response(JSON.stringify({ error: 'No claim provided' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
   }
 
-  async function runCheck() {
-    const claim = document.getElementById('claim-input').value.trim();
-    if (!claim) { document.getElementById('claim-input').focus(); return; }
+  // 3. Grab the environment variable safely
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'API key not configured on server' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
 
-    document.getElementById('input-section').style.display = 'none';
-    document.getElementById('loading-section').style.display = 'block';
-    document.getElementById('result-section').style.display = 'none';
-    animateSteps();
+  try {
+    // 4. Construct the prompt
+    const prompt = `You are TruthCheck, an expert AI fact-checker. A user has submitted the following ${type} content for fact-checking:
 
-    try {
-      const response = await fetch('/api/check', {
+"${claim}"
+
+Analyse this claim carefully using your knowledge of reputable sources, scientific consensus, and verified facts.
+
+Respond ONLY with a valid JSON object. No markdown, no backticks, no conversational text outside the JSON structure.
+Use this exact JSON structure:
+{
+  "verdict": "TRUE" or "FALSE" or "MISLEADING" or "UNVERIFIED",
+  "confidence": 85,
+  "headline": "A short verdict summary",
+  "summary": "2-3 sentences explaining why this is true/false/misleading.",
+  "sources": [
+    {"name": "Source name", "reliability": "High", "note": "One sentence note"}
+  ],
+  "tip": "One practical sentence on how to spot this misinformation."
+}`;
+
+    // 5. Contact Gemini
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claim, type: selectedType })
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { 
+            temperature: 0.1, 
+            maxOutputTokens: 1024,
+            responseMimeType: "application/json" 
+          }
+        })
+      }
+    );
+
+    if (geminiRes.status === 429) {
+      return new Response(JSON.stringify({ error: 'limit_reached' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       });
-
-      if (response.status === 429) { showLimitError(); return; }
-      if (!response.ok) { showGenericError(); return; }
-
-      const data = await response.json();
-      if (data.error) { showGenericError(); return; }
-      renderResult(data);
-
-    } catch(e) {
-      showGenericError();
     }
-  }
 
-  function renderResult(d) {
-    const icons = { TRUE: '✅', FALSE: '❌', MISLEADING: '⚠️', UNVERIFIED: '❓' };
-    const barColors = { TRUE: '#639922', FALSE: '#E24B4A', MISLEADING: '#BA7517', UNVERIFIED: '#888780' };
-    const verdict = d.verdict || 'UNVERIFIED';
-    const conf = Math.round(Math.min(100, Math.max(0, d.confidence || 0)));
-
-    const sourcesHtml = (d.sources || []).map(s => `
-      <div class="source-item">
-        <div class="source-dot"></div>
-        <div>
-          <div><span class="source-name">${s.name}</span><span class="source-rel rel-${s.reliability}">${s.reliability}</span></div>
-          <div class="source-note">${s.note}</div>
-        </div>
-      </div>`).join('');
-
-    document.getElementById('result-inner').innerHTML = `
-      <div class="verdict-banner verdict-${verdict}">
-        <div class="verdict-icon">${icons[verdict] || '❓'}</div>
-        <div class="verdict-label">${verdict}</div>
-        <div class="verdict-headline">${d.headline || ''}</div>
-      </div>
-      <div class="conf-row">
-        <span class="conf-label">Confidence</span>
-        <div class="conf-bar-bg"><div class="conf-bar" style="width:${conf}%;background:${barColors[verdict]};"></div></div>
-        <span class="conf-pct">${conf}%</span>
-      </div>
-      <div class="section-title">What the evidence says</div>
-      <div class="summary">${d.summary || ''}</div>
-      <div class="section-title">Sources checked</div>
-      ${sourcesHtml}
-      <div class="tip-box"><strong>💡 Spot it next time:</strong> ${d.tip || ''}</div>
-      <div class="action-row">
-        <button class="action-btn" onclick="copyResult()">📋 Copy verdict</button>
-        <button class="action-btn action-btn-primary" onclick="shareResult()">🔗 Share</button>
-      </div>`;
-
-    document.getElementById('loading-section').style.display = 'none';
-    document.getElementById('result-section').style.display = 'block';
-  }
-
-  function showLimitError() {
-    document.getElementById('result-inner').innerHTML = `
-      <div class="limit-box">
-        <strong>Daily limit reached</strong><br>
-        We have hit our free daily fact-checking limit. Please try again tomorrow.
-      </div>`;
-    document.getElementById('loading-section').style.display = 'none';
-    document.getElementById('result-section').style.display = 'block';
-  }
-
-  function showGenericError() {
-    document.getElementById('result-inner').innerHTML = `
-      <div class="error-box">
-        <strong>Something went wrong</strong><br>
-        We could not complete the fact-check. Please check your connection and try again.
-      </div>`;
-    document.getElementById('loading-section').style.display = 'none';
-    document.getElementById('result-section').style.display = 'block';
-  }
-
-  function copyResult() {
-    const verdict = document.querySelector('.verdict-label')?.textContent || '';
-    const summary = document.querySelector('.summary')?.textContent || '';
-    const tip = document.querySelector('.tip-box')?.textContent || '';
-    navigator.clipboard.writeText(`TruthCheck Verdict: ${verdict}\n\n${summary}\n\n${tip}\n\nFact-checked at TruthCheck`).catch(() => {});
-    alert('Verdict copied to clipboard!');
-  }
-
-  function shareResult() {
-    const verdict = document.querySelector('.verdict-label')?.textContent || '';
-    const summary = document.querySelector('.summary')?.textContent || '';
-    if (navigator.share) {
-      navigator.share({ title: `TruthCheck: ${verdict}`, text: summary, url: window.location.href });
-    } else {
-      copyResult();
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      return new Response(JSON.stringify({ error: 'gemini_error', detail: errText }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
     }
+
+    const data = await geminiRes.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const parsedJson = JSON.parse(rawText.trim());
+
+    return new Response(JSON.stringify(parsedJson), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+
+  } catch (e) {
+    return new Response(JSON.stringify({ error: 'server_error', detail: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
   }
-</script>
-</body>
-</html>
+}
