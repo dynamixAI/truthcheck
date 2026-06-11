@@ -19,31 +19,40 @@ export default async function handler(req) {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
     });
   }
 
-  // 3. Check for the Secure Environment Variable
-  const apiKey = process.env.GEMINI_API_KEY;
+  // 3. Check for the Secure Environment Variable (Using standard cross-runtime mapping)
+  const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'API key not configured on server' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
     });
   }
 
   try {
-    // 4. Parse the modern Web Request stream body
-    const body = await req.json();
-    const claim = body.claim;
-    const type = body.type || 'text';
-
-    if (!claim) {
+    // 4. Parse the modern Web Request stream body safely
+    const body = await req.json().catch(() => null);
+    if (!body || !body.claim) {
       return new Response(JSON.stringify({ error: 'No claim provided' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        },
       });
     }
+
+    const claim = body.claim;
+    const type = body.type || 'text';
 
     // 5. Structure the Fact-Checking Prompt
     const prompt = `You are TruthCheck, an expert AI fact-checker. A user has submitted the following ${type} content for fact-checking:
@@ -65,7 +74,7 @@ Use this exact JSON structure:
   "tip": "One practical sentence on how to spot this type of misinformation in future."
 }`;
 
-    // 6. Hit the Google Gemini Endpoint (with the responseMimeType safety flag)
+    // 6. Hit the Google Gemini Endpoint (using stable 1.5-flash with JSON mode enabled)
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
@@ -76,7 +85,7 @@ Use this exact JSON structure:
           generationConfig: { 
             temperature: 0.1, 
             maxOutputTokens: 1024,
-            responseMimeType: "application/json" // Force Gemini to safely spit out clean JSON without backticks
+            responseMimeType: "application/json" 
           }
         })
       }
@@ -85,7 +94,10 @@ Use this exact JSON structure:
     if (geminiRes.status === 429) {
       return new Response(JSON.stringify({ error: 'limit_reached' }), {
         status: 429,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        },
       });
     }
 
@@ -93,7 +105,10 @@ Use this exact JSON structure:
       const errText = await geminiRes.text();
       return new Response(JSON.stringify({ error: 'gemini_error', detail: errText }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        },
       });
     }
 
@@ -101,7 +116,7 @@ Use this exact JSON structure:
     const data = await geminiRes.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // Safety parse check to make sure it's valid JSON
+    // Convert to JSON object to verify format structure before returning
     const parsedJson = JSON.parse(rawText.trim());
 
     // 8. Return successful response to the frontend
@@ -116,7 +131,10 @@ Use this exact JSON structure:
   } catch (e) {
     return new Response(JSON.stringify({ error: 'server_error', detail: e.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
     });
   }
 }
