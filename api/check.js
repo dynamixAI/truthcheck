@@ -31,37 +31,40 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No claim provided' });
   }
 
-  const safeClaim = claim
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, ' ')
-    .replace(/\r/g, ' ')
-    .replace(/\t/g, ' ')
+  const claimCleaned = claim
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .substring(0, 1500)
     .trim();
 
   const prompt = [
-    'You are TruthCheck, an expert AI fact-checker.',
-    'A user has submitted the following ' + type + ' content for fact-checking:',
-    '---',
-    safeClaim,
-    '---',
-    'Analyse this claim carefully using your knowledge of reputable sources and verified facts.',
-    'Is this TRUE, FALSE, MISLEADING, or UNVERIFIED?',
-    'Respond ONLY with a valid JSON object. No markdown. No backticks. No text before or after the JSON.',
-    'Use exactly this structure:',
+    'You are TruthCheck, an expert AI fact-checker with access to Google Search.',
+    'Use Google Search to find current, real information about this claim before giving your verdict.',
+    '',
+    'Content type: ' + type,
+    'Claim to fact-check:',
+    claimCleaned,
+    '',
+    'Instructions:',
+    '1. Search for real information about this claim',
+    '2. Identify if it is TRUE, FALSE, MISLEADING, or UNVERIFIED',
+    '3. Name the actual real sources you found',
+    '4. Give a clear verdict with evidence',
+    '',
+    'Respond ONLY with a JSON object. No markdown. No backticks. No text outside the JSON.',
+    'Use exactly this format:',
     '{',
-    '  "verdict": "FALSE",',
-    '  "confidence": 85,',
-    '  "headline": "Short 8 to 10 word summary of verdict",',
-    '  "summary": "2 to 3 sentences explaining the verdict and what the actual facts are.",',
-    '  "sources": [',
-    '    {"name": "Source One", "reliability": "High", "note": "One sentence about what this source says."},',
-    '    {"name": "Source Two", "reliability": "Medium", "note": "One sentence about what this source says."},',
-    '    {"name": "Source Three", "reliability": "High", "note": "One sentence about what this source says."}',
-    '  ],',
-    '  "tip": "One practical sentence on how to spot this type of misinformation in future."',
-    '}',
-    'Replace the example values with your actual analysis. verdict must be one of: TRUE, FALSE, MISLEADING, UNVERIFIED.'
+    '"verdict": "FALSE",',
+    '"confidence": 85,',
+    '"headline": "Short 8 to 10 word summary",',
+    '"summary": "2 to 3 sentences with the actual facts and what is true or false about this claim.",',
+    '"sources": [',
+    '{"name": "Real Source Name", "reliability": "High", "note": "What this source actually says about the claim."},',
+    '{"name": "Real Source Name", "reliability": "High", "note": "What this source actually says about the claim."},',
+    '{"name": "Real Source Name", "reliability": "Medium", "note": "What this source actually says about the claim."}',
+    '],',
+    '"tip": "One practical sentence on how to spot this type of misinformation."',
+    '}'
   ].join('\n');
 
   try {
@@ -72,10 +75,10 @@ export default async function handler(req, res) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
+          tools: [{ googleSearch: {} }],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 2048,
-            responseMimeType: 'application/json'
+            maxOutputTokens: 2048
           }
         })
       }
