@@ -31,7 +31,38 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No claim provided' });
   }
 
-  const prompt = "You are TruthCheck, an expert AI fact-checker. A user has submitted the following " + type + " content for fact-checking: \"" + claim + "\". Analyse this claim carefully. Respond ONLY with a valid JSON object, no markdown, no backticks, no extra text before or after. Use this exact structure: {\"verdict\": \"TRUE or FALSE or MISLEADING or UNVERIFIED\", \"confidence\": 85, \"headline\": \"Short 8-10 word summary\", \"summary\": \"2-3 sentences explaining the verdict and actual facts.\", \"sources\": [{\"name\": \"Source name\", \"reliability\": \"High\", \"note\": \"One sentence note\"}, {\"name\": \"Source name\", \"reliability\": \"Medium\", \"note\": \"One sentence note\"}, {\"name\": \"Source name\", \"reliability\": \"High\", \"note\": \"One sentence note\"}], \"tip\": \"One practical sentence on spotting this misinformation.\"}";
+  const safeClaim = claim
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, ' ')
+    .replace(/\r/g, ' ')
+    .replace(/\t/g, ' ')
+    .trim();
+
+  const prompt = [
+    'You are TruthCheck, an expert AI fact-checker.',
+    'A user has submitted the following ' + type + ' content for fact-checking:',
+    '---',
+    safeClaim,
+    '---',
+    'Analyse this claim carefully using your knowledge of reputable sources and verified facts.',
+    'Is this TRUE, FALSE, MISLEADING, or UNVERIFIED?',
+    'Respond ONLY with a valid JSON object. No markdown. No backticks. No text before or after the JSON.',
+    'Use exactly this structure:',
+    '{',
+    '  "verdict": "FALSE",',
+    '  "confidence": 85,',
+    '  "headline": "Short 8 to 10 word summary of verdict",',
+    '  "summary": "2 to 3 sentences explaining the verdict and what the actual facts are.",',
+    '  "sources": [',
+    '    {"name": "Source One", "reliability": "High", "note": "One sentence about what this source says."},',
+    '    {"name": "Source Two", "reliability": "Medium", "note": "One sentence about what this source says."},',
+    '    {"name": "Source Three", "reliability": "High", "note": "One sentence about what this source says."}',
+    '  ],',
+    '  "tip": "One practical sentence on how to spot this type of misinformation in future."',
+    '}',
+    'Replace the example values with your actual analysis. verdict must be one of: TRUE, FALSE, MISLEADING, UNVERIFIED.'
+  ].join('\n');
 
   try {
     const geminiRes = await fetch(
@@ -60,7 +91,6 @@ export default async function handler(req, res) {
     }
 
     const data = await geminiRes.json();
-
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!raw) {
@@ -70,7 +100,6 @@ export default async function handler(req, res) {
     const clean = raw
       .replace(/```json/gi, '')
       .replace(/```/g, '')
-      .replace(/[\u0000-\u001F\u007F]/g, ' ')
       .trim();
 
     const firstBrace = clean.indexOf('{');
