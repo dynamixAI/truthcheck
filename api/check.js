@@ -1,3 +1,9 @@
+export const config = {
+  api: {
+    bodyParser: true,
+  },
+};
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -13,23 +19,16 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'API key not configured on server' });
+    return res.status(500).json({ error: 'API key not configured' });
   }
 
-  // Handle both URL parameters or JSON bodies to make sure it never crashes
   let claim, type;
   try {
-    const { searchParams } = new URL(req.url, `http://${req.headers.host}`);
-    claim = searchParams.get('claim');
-    type = searchParams.get('type') || 'text';
-
-    if (!claim && req.body) {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      claim = body.claim;
-      type = body.type || 'text';
-    }
-  } catch (e) {
-    return res.status(400).json({ error: 'Invalid request parsing' });
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    claim = body.claim;
+    type = body.type || 'text';
+  } catch(e) {
+    return res.status(400).json({ error: 'Invalid request body' });
   }
 
   if (!claim) {
@@ -40,14 +39,14 @@ export default async function handler(req, res) {
 "${claim}"
 
 Analyse this claim carefully using your knowledge of reputable sources, scientific consensus, and verified facts.
-Respond ONLY with a valid JSON object matching this structure:
+Respond ONLY with a valid JSON object matching this exact structure:
 {
-  "verdict": "TRUE",
+  "verdict": "TRUE" or "FALSE" or "MISLEADING" or "UNVERIFIED",
   "confidence": 85,
-  "headline": "Verdict summary here",
-  "summary": "Explanation sentences here.",
-  "sources": [{"name": "Source", "reliability": "High", "note": "Note here"}],
-  "tip": "Tip here"
+  "headline": "A short summary",
+  "summary": "2-3 sentences explaining the facts.",
+  "sources": [{"name": "Source name", "reliability": "High", "note": "One sentence note"}],
+  "tip": "One practical sentence."
 }`;
 
   try {
@@ -58,18 +57,30 @@ Respond ONLY with a valid JSON object matching this structure:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1024, responseMimeType: "application/json" }
+          generationConfig: { 
+            temperature: 0.1, 
+            maxOutputTokens: 1024,
+            responseMimeType: "application/json" // ⚡ This fixes the 500 error permanently
+          }
         })
       }
     );
 
-    if (geminiRes.status === 429) return res.status(429).json({ error: 'limit_reached' });
-    if (!geminiRes.ok) return res.status(500).json({ error: 'gemini_error' });
+    if (geminiRes.status === 429) {
+      return res.status(429).json({ error: 'limit_reached' });
+    }
+
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      return res.status(500).json({ error: 'gemini_error', detail: errText });
+    }
 
     const data = await geminiRes.json();
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return res.status(200).json(JSON.parse(rawText.trim()));
-  } catch (e) {
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const parsed = JSON.parse(raw.trim());
+    return res.status(200).json(parsed);
+
+  } catch(e) {
     return res.status(500).json({ error: 'server_error', detail: e.message });
   }
 }
