@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/check", "destination": "/api/check" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
