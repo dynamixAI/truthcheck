@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No claim provided' });
   }
 
-  const prompt = "You are TruthCheck, an expert AI fact-checker. A user has submitted the following " + type + " content for fact-checking: \"" + claim + "\". Analyse this claim carefully. Respond ONLY with a valid JSON object, no markdown, no backticks. Use this exact structure: {\"verdict\": \"TRUE or FALSE or MISLEADING or UNVERIFIED\", \"confidence\": 85, \"headline\": \"Short 8-10 word summary\", \"summary\": \"2-3 sentences explaining the verdict and actual facts.\", \"sources\": [{\"name\": \"Source name\", \"reliability\": \"High\", \"note\": \"One sentence note\"}, {\"name\": \"Source name\", \"reliability\": \"Medium\", \"note\": \"One sentence note\"}, {\"name\": \"Source name\", \"reliability\": \"High\", \"note\": \"One sentence note\"}], \"tip\": \"One practical sentence on spotting this misinformation.\"}";
+  const prompt = "You are TruthCheck, an expert AI fact-checker. A user has submitted the following " + type + " content for fact-checking: \"" + claim + "\". Analyse this claim carefully. Respond ONLY with a valid JSON object, no markdown, no backticks, no extra text before or after. Use this exact structure: {\"verdict\": \"TRUE or FALSE or MISLEADING or UNVERIFIED\", \"confidence\": 85, \"headline\": \"Short 8-10 word summary\", \"summary\": \"2-3 sentences explaining the verdict and actual facts.\", \"sources\": [{\"name\": \"Source name\", \"reliability\": \"High\", \"note\": \"One sentence note\"}, {\"name\": \"Source name\", \"reliability\": \"Medium\", \"note\": \"One sentence note\"}, {\"name\": \"Source name\", \"reliability\": \"High\", \"note\": \"One sentence note\"}], \"tip\": \"One practical sentence on spotting this misinformation.\"}";
 
   try {
     const geminiRes = await fetch(
@@ -43,7 +43,8 @@ export default async function handler(req, res) {
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 1024
+            maxOutputTokens: 2048,
+            responseMimeType: 'application/json'
           }
         })
       }
@@ -59,14 +60,28 @@ export default async function handler(req, res) {
     }
 
     const data = await geminiRes.json();
+
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!raw) {
-      return res.status(500).json({ error: 'no_response', detail: data });
+      return res.status(500).json({ error: 'no_response', detail: JSON.stringify(data) });
     }
 
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
+    const clean = raw
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .replace(/[\u0000-\u001F\u007F]/g, ' ')
+      .trim();
+
+    const firstBrace = clean.indexOf('{');
+    const lastBrace = clean.lastIndexOf('}');
+
+    if (firstBrace === -1 || lastBrace === -1) {
+      return res.status(500).json({ error: 'no_json_found', raw: clean });
+    }
+
+    const jsonOnly = clean.substring(firstBrace, lastBrace + 1);
+    const parsed = JSON.parse(jsonOnly);
     return res.status(200).json(parsed);
 
   } catch (e) {
