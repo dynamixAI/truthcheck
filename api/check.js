@@ -1,63 +1,71 @@
 export const config = {
-  api: {
-    bodyParser: true,
-  },
+  runtime: 'edge', // Tells Vercel to use the modern, blazing-fast standard runtime
 };
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+export default async function handler(req) {
+  // 1. Handle CORS Preflight Options Request
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    });
   }
 
+  // 2. Only allow POST requests
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
+  // 3. Check for the Secure Environment Variable
   const apiKey = process.env.GEMINI_API_KEY;
-
   if (!apiKey) {
-    return res.status(500).json({ error: 'API key not configured' });
+    return new Response(JSON.stringify({ error: 'API key not configured on server' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-
-  let claim, type;
 
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    claim = body.claim;
-    type = body.type || 'text';
-  } catch(e) {
-    return res.status(400).json({ error: 'Invalid request body' });
-  }
+    // 4. Parse the modern Web Request stream body
+    const body = await req.json();
+    const claim = body.claim;
+    const type = body.type || 'text';
 
-  if (!claim) {
-    return res.status(400).json({ error: 'No claim provided' });
-  }
+    if (!claim) {
+      return new Response(JSON.stringify({ error: 'No claim provided' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-  const prompt = `You are TruthCheck, an expert AI fact-checker. A user has submitted the following ${type} content for fact-checking:
+    // 5. Structure the Fact-Checking Prompt
+    const prompt = `You are TruthCheck, an expert AI fact-checker. A user has submitted the following ${type} content for fact-checking:
 
 "${claim}"
 
 Analyse this claim carefully using your knowledge of reputable sources, scientific consensus, and verified facts.
 
-Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation outside the JSON. Use this exact structure:
+Respond ONLY with a valid JSON object. No markdown, no backticks, no conversational text outside the JSON structure.
+Use this exact JSON structure:
 {
   "verdict": "TRUE" or "FALSE" or "MISLEADING" or "UNVERIFIED",
-  "confidence": a number from 0 to 100,
+  "confidence": 85,
   "headline": "A short 8-10 word verdict summary",
   "summary": "2-3 sentences explaining why this is true/false/misleading. Include what the actual facts are.",
   "sources": [
-    {"name": "Source name", "reliability": "High" or "Medium", "note": "One sentence on what this source says about the claim"},
-    {"name": "Source name", "reliability": "High" or "Medium", "note": "One sentence note"},
-    {"name": "Source name", "reliability": "High" or "Medium", "note": "One sentence note"}
+    {"name": "Source name", "reliability": "High", "note": "One sentence note here"}
   ],
   "tip": "One practical sentence on how to spot this type of misinformation in future."
 }`;
 
-  try {
+    // 6. Hit the Google Gemini Endpoint (with the responseMimeType safety flag)
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
@@ -65,27 +73,50 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no explanation
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+          generationConfig: { 
+            temperature: 0.1, 
+            maxOutputTokens: 1024,
+            responseMimeType: "application/json" // Force Gemini to safely spit out clean JSON without backticks
+          }
         })
       }
     );
 
     if (geminiRes.status === 429) {
-      return res.status(429).json({ error: 'limit_reached' });
+      return new Response(JSON.stringify({ error: 'limit_reached' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
-      return res.status(500).json({ error: 'gemini_error', detail: errText });
+      return new Response(JSON.stringify({ error: 'gemini_error', detail: errText }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
+    // 7. Extract the text generated by Gemini
     const data = await geminiRes.json();
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
-    return res.status(200).json(parsed);
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // Safety parse check to make sure it's valid JSON
+    const parsedJson = JSON.parse(rawText.trim());
 
-  } catch(e) {
-    return res.status(500).json({ error: 'server_error', detail: e.message });
+    // 8. Return successful response to the frontend
+    return new Response(JSON.stringify(parsedJson), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
+
+  } catch (e) {
+    return new Response(JSON.stringify({ error: 'server_error', detail: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
