@@ -215,11 +215,10 @@
     animateSteps();
 
     try {
-      // ✅ Fixed: Encodes properties into the URL query safe for Vercel Edge Runtime parameters
-      const url = `/api/check?claim=${encodeURIComponent(claim)}&type=${encodeURIComponent(selectedType)}`;
-      
-      const response = await fetch(url, {
-        method: 'POST'
+      const response = await fetch('/api/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claim, type: selectedType })
       });
 
       if (response.status === 429) { showLimitError(); return; }
@@ -230,7 +229,6 @@
       renderResult(data);
 
     } catch(e) {
-      console.error(e);
       showGenericError();
     }
   }
