@@ -7,67 +7,25 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   const apiKey = process.env.GEMINI_API_KEY;
-
   if (!apiKey) {
-    return res.status(500).json({ error: 'API key not configured' });
+    return res.status(500).json({ error: 'no api key' });
   }
 
   let claim, type;
-
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     claim = body.claim;
     type = body.type || 'text';
   } catch (e) {
-    return res.status(400).json({ error: 'Invalid request body' });
-  }
-
-  if (!claim) {
-    return res.status(400).json({ error: 'No claim provided' });
+    return res.status(400).json({ error: 'bad body' });
   }
 
   const claimCleaned = claim
     .replace(/[\r\n\t]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .substring(0, 1500)
+    .substring(0, 800)
     .trim();
-
-  const prompt = [
-    'You are TruthCheck, an expert AI fact-checker with access to Google Search.',
-    'Use Google Search to find current, real information about this claim before giving your verdict.',
-    '',
-    'Content type: ' + type,
-    'Claim to fact-check:',
-    claimCleaned,
-    '',
-    'Instructions:',
-    '1. Search for real information about this claim',
-    '2. Identify if it is TRUE, FALSE, MISLEADING, or UNVERIFIED',
-    '3. Name the actual real sources you found',
-    '4. Give a clear verdict with evidence',
-    '',
-    'Respond ONLY with a JSON object. No markdown. No backticks. No text outside the JSON.',
-    'Use exactly this format:',
-    '{',
-    '"verdict": "FALSE",',
-    '"confidence": 85,',
-    '"headline": "Short 8 to 10 word summary",',
-    '"summary": "2 to 3 sentences with the actual facts and what is true or false about this claim.",',
-    '"sources": [',
-    '{"name": "Real Source Name", "reliability": "High", "note": "What this source actually says about the claim."},',
-    '{"name": "Real Source Name", "reliability": "High", "note": "What this source actually says about the claim."},',
-    '{"name": "Real Source Name", "reliability": "Medium", "note": "What this source actually says about the claim."}',
-    '],',
-    '"tip": "One practical sentence on how to spot this type of misinformation."',
-    '}'
-  ].join('\n');
-
-  let raw;
 
   try {
     const geminiRes = await fetch(
@@ -76,66 +34,19 @@ export default async function handler(req, res) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ googleSearch: {} }],
+          contents: [{ parts: [{ text: 'Fact check this in one sentence: ' + claimCleaned }] }],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 2048
+            maxOutputTokens: 200
           }
         })
       }
     );
 
-    if (geminiRes.status === 429) {
-      return res.status(429).json({ error: 'limit_reached' });
-    }
-
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      return res.status(500).json({ error: 'gemini_error', detail: errText });
-    }
-
     const data = await geminiRes.json();
-
-    const parts = data.candidates?.[0]?.content?.parts;
-
-    if (!parts || parts.length === 0) {
-      return res.status(500).json({ error: 'no_parts', detail: JSON.stringify(data) });
-    }
-
-    raw = parts
-      .filter(p => p.text)
-      .map(p => p.text)
-      .join('');
-
-    if (!raw) {
-      return res.status(500).json({ error: 'no_text', detail: JSON.stringify(parts) });
-    }
-
-    const clean = raw
-      .replace(/```json/gi, '')
-      .replace(/```/g, '')
-      .trim();
-
-    const firstBrace = clean.indexOf('{');
-    const lastBrace = clean.lastIndexOf('}');
-
-    if (firstBrace === -1 || lastBrace === -1) {
-      return res.status(500).json({ 
-        error: 'no_json_found', 
-        raw: clean.substring(0, 500) 
-      });
-    }
-
-    const jsonOnly = clean.substring(firstBrace, lastBrace + 1);
-    const parsed = JSON.parse(jsonOnly);
-    return res.status(200).json(parsed);
+    return res.status(200).json({ status: geminiRes.status, data: data });
 
   } catch (e) {
-    return res.status(500).json({
-      error: 'server_error',
-      detail: e.message,
-      raw: typeof raw !== 'undefined' ? raw.substring(0, 500) : 'no raw response'
-    });
+    return res.status(500).json({ error: e.message });
   }
 }
