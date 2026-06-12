@@ -67,6 +67,8 @@ export default async function handler(req, res) {
     '}'
   ].join('\n');
 
+  let raw;
+
   try {
     const geminiRes = await fetch(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,
@@ -94,10 +96,20 @@ export default async function handler(req, res) {
     }
 
     const data = await geminiRes.json();
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    const parts = data.candidates?.[0]?.content?.parts;
+
+    if (!parts || parts.length === 0) {
+      return res.status(500).json({ error: 'no_parts', detail: JSON.stringify(data) });
+    }
+
+    raw = parts
+      .filter(p => p.text)
+      .map(p => p.text)
+      .join('');
 
     if (!raw) {
-      return res.status(500).json({ error: 'no_response', detail: JSON.stringify(data) });
+      return res.status(500).json({ error: 'no_text', detail: JSON.stringify(parts) });
     }
 
     const clean = raw
@@ -109,7 +121,10 @@ export default async function handler(req, res) {
     const lastBrace = clean.lastIndexOf('}');
 
     if (firstBrace === -1 || lastBrace === -1) {
-      return res.status(500).json({ error: 'no_json_found', raw: clean });
+      return res.status(500).json({ 
+        error: 'no_json_found', 
+        raw: clean.substring(0, 500) 
+      });
     }
 
     const jsonOnly = clean.substring(firstBrace, lastBrace + 1);
@@ -117,6 +132,10 @@ export default async function handler(req, res) {
     return res.status(200).json(parsed);
 
   } catch (e) {
-    return res.status(500).json({ error: 'server_error', detail: e.message });
+    return res.status(500).json({
+      error: 'server_error',
+      detail: e.message,
+      raw: typeof raw !== 'undefined' ? raw.substring(0, 500) : 'no raw response'
+    });
   }
 }
